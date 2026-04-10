@@ -3,11 +3,15 @@
 
 This project is a SaaS starter combining a [Next.js](https://nextjs.org) frontend with a [FastAPI](https://fastapi.tiangolo.com/) backend. It generates new business ideas for AI agents using the OpenAI API.
 
+
 ## Features
 
 - **Frontend:** Next.js (React, TypeScript, Tailwind CSS)
 - **Backend:** FastAPI (Python)
 - **AI Integration:** Calls OpenAI API to generate business ideas
+- **Webhook Integration:** Handles subscription events via `/webhook/subscription`
+- **Email Notifications:** (Planned) Sends emails for subscription changes
+- **Admin Dashboard:** (Planned) Manage users and subscriptions
 
 ---
 
