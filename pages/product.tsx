@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useRef } from 'react';
+import jsPDF from 'jspdf';
 import { useAuth } from '@clerk/nextjs';
 import DatePicker from 'react-datepicker';
 import ReactMarkdown from 'react-markdown';
@@ -9,6 +10,7 @@ import remarkBreaks from 'remark-breaks';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { Protect, PricingTable, UserButton } from '@clerk/nextjs';
 
+
 function ConsultationForm() {
     const { getToken } = useAuth();
 
@@ -16,10 +18,37 @@ function ConsultationForm() {
     const [patientName, setPatientName] = useState('');
     const [visitDate, setVisitDate] = useState<Date | null>(new Date());
     const [notes, setNotes] = useState('');
+    // Specialty and urgency
+    const [specialty, setSpecialty] = useState('general practice');
+    const [urgency, setUrgency] = useState<'routine' | 'urgent' | 'emergency'>('routine');
 
     // Streaming state
     const [output, setOutput] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Ref for markdown content
+    const markdownRef = useRef<HTMLDivElement>(null);
+
+    // Export to PDF
+    const handleExportPDF = () => {
+        if (!output) return;
+        const doc = new jsPDF();
+        doc.text(output.replace(/\n/g, '\n'), 10, 10);
+        doc.save('consultation-summary.pdf');
+    };
+
+    // Copy email section
+    const handleCopyEmail = () => {
+        if (!output) return;
+        const match = output.match(/### Draft of email to patient in patient-friendly language[\r\n]+([\s\S]*)/i);
+        const emailText = match ? match[1].trim() : '';
+        if (emailText) {
+            navigator.clipboard.writeText(emailText);
+            alert('Email draft copied to clipboard!');
+        } else {
+            alert('Email section not found.');
+        }
+    };
 
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
@@ -47,6 +76,8 @@ function ConsultationForm() {
                 patient_name: patientName,
                 date_of_visit: visitDate?.toISOString().slice(0, 10),
                 notes,
+                specialty,
+                urgency,
             }),
             onmessage(ev) {
                 buffer += ev.data;
@@ -115,6 +146,40 @@ function ConsultationForm() {
                     />
                 </div>
 
+                <div className="space-y-2">
+                    <label htmlFor="specialty" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Specialty
+                    </label>
+                    <select
+                        id="specialty"
+                        value={specialty}
+                        onChange={e => setSpecialty(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                    >
+                        <option value="general practice">General Practice</option>
+                        <option value="cardiology">Cardiology</option>
+                        <option value="pediatrics">Pediatrics</option>
+                        <option value="psychiatry">Psychiatry</option>
+                        {/* Add more specialties as needed */}
+                    </select>
+                </div>
+
+                <div className="space-y-2">
+                    <label htmlFor="urgency" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Urgency Level
+                    </label>
+                    <select
+                        id="urgency"
+                        value={urgency}
+                        onChange={e => setUrgency(e.target.value as 'routine' | 'urgent' | 'emergency')}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                    >
+                        <option value="routine">Routine</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="emergency">Emergency</option>
+                    </select>
+                </div>
+
                 <button 
                     type="submit" 
                     disabled={loading}
@@ -126,7 +191,21 @@ function ConsultationForm() {
 
             {output && (
                 <section className="mt-8 bg-gray-50 dark:bg-gray-800 rounded-xl shadow-lg p-8">
-                    <div className="markdown-content prose prose-blue dark:prose-invert max-w-none">
+                    <div className="flex gap-4 mb-4">
+                        <button
+                            onClick={handleExportPDF}
+                            className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                            Export to PDF
+                        </button>
+                        <button
+                            onClick={handleCopyEmail}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                            Copy Email
+                        </button>
+                    </div>
+                    <div ref={markdownRef} className="markdown-content prose prose-blue dark:prose-invert max-w-none">
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                             {output}
                         </ReactMarkdown>
