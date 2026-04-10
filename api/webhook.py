@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
-from email_utils import send_email_notification
+from .email_utils import send_email_notification
 
 router = APIRouter()
 
