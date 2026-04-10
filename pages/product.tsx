@@ -40,7 +40,8 @@ function ConsultationForm() {
     // Copy email section
     const handleCopyEmail = () => {
         if (!output) return;
-        const match = output.match(/### Draft of email to patient in patient-friendly language[\r\n]+([\s\S]*)/i);
+        // Match heading containing 'Draft Email to Send as', then capture until next heading or end
+        const match = output.match(/###\s*Draft Email to Send as.*[\r\n]+([\s\S]*?)(?:\n### |\n## |\n# |$)/i);
         const emailText = match ? match[1].trim() : '';
         if (emailText) {
             navigator.clipboard.writeText(emailText);
