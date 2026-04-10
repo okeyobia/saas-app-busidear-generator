@@ -40,8 +40,8 @@ function ConsultationForm() {
     // Copy email section
     const handleCopyEmail = () => {
         if (!output) return;
-        // Match heading containing 'Draft email', then capture until next heading or end
-        const match = output.match(/###\s*Draft email.*[\r\n]+([\s\S]*?)(?:\n### |\n## |\n# |$)/i);
+        // Copy from 'Subject:' (including the line) until the next 'Notes' line or end
+        const match = output.match(/(Subject:[ \t]*[\s\S]*?)(?:\nNotes|$)/i);
         const emailText = match ? match[1].trim() : '';
         if (emailText) {
             navigator.clipboard.writeText(emailText);
