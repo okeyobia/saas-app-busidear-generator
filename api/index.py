@@ -1,12 +1,4 @@
-def get_system_prompt(specialty: str) -> str:
-    prompts = {
-        "cardiology": "Focus on cardiac symptoms and cardiovascular health. Provide recommendations based on the latest cardiology guidelines.",
-        "pediatrics": "Use child-friendly language in patient communications. Consider age-appropriate advice and pediatric best practices.",
-        "psychiatry": "Include mental health considerations and resources. Be sensitive to psychiatric symptoms and offer supportive guidance.",
-        # Add more specialties as needed
-    }
-    default_prompt = "You are a helpful, knowledgeable medical assistant."
-    return prompts.get(specialty, default_prompt)
+
 import os
 from fastapi import FastAPI, Depends  # type: ignore
 from fastapi.responses import StreamingResponse  # type: ignore
@@ -17,6 +9,16 @@ from openai import OpenAI  # type: ignore
 app = FastAPI()
 clerk_config = ClerkConfig(jwks_url=os.getenv("CLERK_JWKS_URL"))
 clerk_guard = ClerkHTTPBearer(clerk_config)
+
+def get_system_prompt(specialty: str) -> str:
+    prompts = {
+        "cardiology": "Focus on cardiac symptoms and cardiovascular health. Provide recommendations based on the latest cardiology guidelines.",
+        "pediatrics": "Use child-friendly language in patient communications. Consider age-appropriate advice and pediatric best practices.",
+        "psychiatry": "Include mental health considerations and resources. Be sensitive to psychiatric symptoms and offer supportive guidance.",
+        # Add more specialties as needed
+    }
+    default_prompt = "You are a helpful, knowledgeable medical assistant."
+    return prompts.get(specialty, default_prompt)
 
 
 

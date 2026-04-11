@@ -11,8 +11,19 @@ import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { Protect, PricingTable, UserButton } from '@clerk/nextjs';
 
 
+
 function ConsultationForm() {
     const { getToken } = useAuth();
+
+    // Pre-built templates for common conditions
+    const templates = [
+        { label: 'Select a template...', value: '' },
+        { label: 'Hypertension Follow-up', value: 'Patient presents for hypertension follow-up. Blood pressure readings at home have been elevated. No chest pain, shortness of breath, or vision changes.' },
+        { label: 'Diabetes Check', value: 'Routine diabetes check. Patient reports good medication adherence. No hypoglycemic episodes. Recent labs pending.' },
+        { label: 'Pediatric Well Visit', value: 'Child here for annual well visit. No acute complaints. Growth and development on track.' },
+        { label: 'Depression Management', value: 'Patient seen for depression management. Mood improved with current therapy. No suicidal ideation.' },
+        // Add more templates as needed
+    ];
 
     // Form state
     const [patientName, setPatientName] = useState('');
@@ -21,6 +32,38 @@ function ConsultationForm() {
     // Specialty and urgency
     const [specialty, setSpecialty] = useState('general practice');
     const [urgency, setUrgency] = useState<'routine' | 'urgent' | 'emergency'>('routine');
+
+    // Voice input state
+    const [isDictating, setIsDictating] = useState(false);
+    const recognitionRef = useRef<any>(null);
+
+    const handleStartDictation = () => {
+        if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+            alert('Speech recognition is not supported in this browser.');
+            return;
+        }
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setNotes(prev => prev ? prev + ' ' + transcript : transcript);
+        };
+        recognition.onend = () => setIsDictating(false);
+        recognition.onerror = () => setIsDictating(false);
+        recognitionRef.current = recognition;
+        setIsDictating(true);
+        recognition.start();
+    };
+
+    const handleStopDictation = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsDictating(false);
+        }
+    };
 
     // Streaming state
     const [output, setOutput] = useState('');
@@ -51,10 +94,21 @@ function ConsultationForm() {
         }
     };
 
+    // Analytics state
+    const [analytics, setAnalytics] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const data = localStorage.getItem('consultation_analytics');
+            return data ? JSON.parse(data) : { count: 0, totalTime: 0 };
+        }
+        return { count: 0, totalTime: 0 };
+    });
+    const [startTime, setStartTime] = useState<number | null>(null);
+
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         setOutput('');
         setLoading(true);
+        setStartTime(Date.now());
 
         const jwt = await getToken();
         if (!jwt) {
@@ -84,8 +138,19 @@ function ConsultationForm() {
                 buffer += ev.data;
                 setOutput(buffer);
             },
-            onclose() { 
-                setLoading(false); 
+            onclose() {
+                setLoading(false);
+                if (startTime) {
+                    const elapsed = Math.round((Date.now() - startTime) / 1000); // seconds
+                    // Assume 5 min (300s) saved per consult as a placeholder
+                    const timeSaved = 300;
+                    const newAnalytics = {
+                        count: analytics.count + 1,
+                        totalTime: analytics.totalTime + timeSaved,
+                    };
+                    setAnalytics(newAnalytics);
+                    localStorage.setItem('consultation_analytics', JSON.stringify(newAnalytics));
+                }
             },
             onerror(err) {
                 console.error('SSE error:', err);
@@ -133,18 +198,47 @@ function ConsultationForm() {
                 </div>
 
                 <div className="space-y-2">
+                    <label htmlFor="template" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Template Library
+                    </label>
+                    <select
+                        id="template"
+                        value=""
+                        onChange={e => {
+                            const val = e.target.value;
+                            if (val) setNotes(val);
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                    >
+                        {templates.map(t => (
+                            <option key={t.label} value={t.value}>{t.label}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="space-y-2">
                     <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Consultation Notes
                     </label>
-                    <textarea
-                        id="notes"
-                        required
-                        rows={8}
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                        placeholder="Enter detailed consultation notes..."
-                    />
+                    <div className="flex gap-2 items-center">
+                        <textarea
+                            id="notes"
+                            required
+                            rows={8}
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                            placeholder="Enter detailed consultation notes..."
+                        />
+                        <button
+                            type="button"
+                            onClick={isDictating ? handleStopDictation : handleStartDictation}
+                            className={`ml-2 px-3 py-2 rounded-lg font-semibold transition-colors ${isDictating ? 'bg-red-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-blue-600 hover:text-white'}`}
+                            aria-label={isDictating ? 'Stop dictation' : 'Start dictation'}
+                        >
+                            {isDictating ? 'Stop' : '🎤 Dictate'}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="space-y-2">
@@ -206,13 +300,63 @@ function ConsultationForm() {
                             Copy Email
                         </button>
                     </div>
-                    <div ref={markdownRef} className="markdown-content prose prose-blue dark:prose-invert max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                            {output}
-                        </ReactMarkdown>
-                    </div>
+                    {/* Structured output rendering */}
+                    {(() => {
+                        let parsed: any = null;
+                        try {
+                            parsed = JSON.parse(output);
+                        } catch {
+                            // Not JSON, fallback to markdown
+                        }
+                        if (parsed && typeof parsed === 'object' && (parsed.summary || parsed.next_steps || parsed.draft_email)) {
+                            return (
+                                <div className="space-y-6">
+                                    {parsed.summary && (
+                                        <div>
+                                            <h3 className="text-lg font-bold mb-1">Summary of Visit</h3>
+                                            <div className="prose prose-blue dark:prose-invert max-w-none">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{parsed.summary}</ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {parsed.next_steps && (
+                                        <div>
+                                            <h3 className="text-lg font-bold mb-1">Next Steps</h3>
+                                            <div className="prose prose-blue dark:prose-invert max-w-none">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{parsed.next_steps}</ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {parsed.draft_email && (
+                                        <div>
+                                            <h3 className="text-lg font-bold mb-1">Draft Email</h3>
+                                            <div className="prose prose-blue dark:prose-invert max-w-none">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{parsed.draft_email}</ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+                        // Fallback: render as markdown
+                        return (
+                            <div ref={markdownRef} className="markdown-content prose prose-blue dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                    {output}
+                                </ReactMarkdown>
+                            </div>
+                        );
+                    })()}
                 </section>
             )}
+
+            {/* Analytics Section */}
+            <section className="mt-8 bg-white dark:bg-gray-900 rounded-xl shadow p-6 flex flex-col items-center">
+                <h2 className="text-lg font-bold mb-2">Consultation Analytics</h2>
+                <p className="mb-1">Total consultations: <span className="font-semibold">{analytics.count}</span></p>
+                <p className="mb-1">Estimated time saved: <span className="font-semibold">{Math.round(analytics.totalTime / 60)} min</span></p>
+                <p className="text-xs text-gray-500">(Assumes 5 min saved per consult)</p>
+            </section>
         </div>
     );
 }
